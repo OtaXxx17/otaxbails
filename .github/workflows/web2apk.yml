@@ -1,0 +1,38 @@
+name: web2apk
+on:
+  workflow_dispatch:
+    inputs:
+      build_id:
+        required: true
+      app_name:
+        required: true
+      package_id:
+        required: false
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker pull hamdifourati/cordova-android-builder
+      - name: Build
+        run: |
+          set -e
+          ID="${{ github.event.inputs.build_id }}"
+          APP="${{ github.event.inputs.app_name }}"
+          PKG="${{ github.event.inputs.package_id }}"
+          [ -z "$PKG" ] && PKG="id.web2apk.app"
+          ROOT="$GITHUB_WORKSPACE/jobs/$ID"
+          if [ ! -d "$ROOT/www" ]; then echo "No WWW at $ROOT"; exit 1; fi
+          docker run --rm -v "$ROOT":/work -w /work hamdifourati/cordova-android-builder bash -lc "
+            set -e
+            cordova create app $PKG \"$APP\"
+            cd app
+            cordova platform add android@13
+            cordova plugin add cordova-plugin-whitelist
+            rm -rf www && mkdir www && cp -r /work/www/* www/
+            cordova build android
+          "
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apk-${{ github.event.inputs.build_id }}
+          path: jobs/${{ github.event.inputs.build_id }}/app/platforms/android/app/build/outputs/apk/debug/app-debug.apk
